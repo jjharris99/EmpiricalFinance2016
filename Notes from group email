@@ -1,0 +1,33 @@
+Empirical Methods
+Quesiton 1: Yield curve model
+Very challenging problem
+First part is just using the Appendix A.1
+VAR regression
+Use quarterly data
+The Sigma  equation (below) is just the covariance - variance method
+
+If you want to see the results of my VAR regressions check out my github page on a laptop or desktop computer (https://github.com/mrefermat/FinancePhD/blob/master/Empirical%20Methods/Homework2/Homework2-part1.ipynb)
+Second part - Joslin et all approach
+Very complicated methodology that is hard to understand
+However code is provided and easy to use
+Question doesn’t require much in depth knowledge of the paper
+Question 2:
+Lots of questions around what is alpha is HF space
+What goes into the regression
+Fung and Hsish factors include negative ones
+Data has duplicates and other currency classes
+BSW method is straightforward to generate via appendix and paper
+Results show nearly all either have zero alpha or positive
+Ferson and Chen
+Much more complicated to understand
+Many more parameters to estimate or select
+
+A few comments regarding part 1 of the first question:
+ 
+1)      Sigma is NOT the covariance matrix Omega but rather a lower triangular matrix such that Sigma*Sigma’ = Omega (Covariance Matrix of the residuals).  Sigma = chol(Omega, ‘lower’) in Matlab. 
+
+2)      It is important to make sure that the yield and GDP growth data are divided by 100 prior to estimation.  It has no impact for the first step but has very significant implications for the second step.  I don’t want to go into technical details of the eigenvalues (though would be happy to elaborate) but not scaling the variables appropriately would result in parameters An and Bn blowing up.  I am still wrestling with tackling the second step optimization because I can’t get it to converge but at least the values are not blowing up anymore.
+
+Regarding part 2 of the first question:
+ 
+It appears that the steps are the following.  First, PCA of the original subset of yields y gives N (2 in the code) eigenvectors P (“pricing factors”) with the largest eigenvalues.  W is such that Wy = P (see page 935).  Then equation (18) provides a separation of estimation parameters that is somewhat similar to the first paper with the first component governing the cross-sectional relation of yields on state variables (step 2) and the second component reflecting the time-series evolution of state variables (step 1).  It is interesting that the components are calculated based on parameters from different measures Q (risk-neutral) vs P (physical).  It looks as if all estimation is done in function sample_estimation.m.  Note that lambdas are the vector of eigenvalues of K1Q_X (see page 930).  
