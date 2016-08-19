@@ -63,11 +63,11 @@ for (fcol in 2:6393) {#ncol(fof)) {
     pvals=rbind(pvals,pvalf)
 #     coefs=rbind(coefs,fit$coefficients)
 #     tstats=rbind(tstats,summary(fit)$coefficients[,3])
-    pvals2=rbind(pvals2,summary(fit)$coefficients[,4])
+#     pvals2=rbind(pvals2,summary(fit)$coefficients[,4])
   }
 }
 hist(pvals[,1],50,)
-hist(pvals2[,1],50)
+# hist(pvals2[,1],50)
 # pvals=pvals2
   
 names(coefs)=names(fit$coefficients)
@@ -99,129 +99,152 @@ pihat0b=NULL
 for (b in 1:1000) {
   pihat0b=rbind(pihat0b,sapply(testlambdas,getpihat,sample(x=pvals[,1],size=length(pvals[,1]),replace=T)))
 }
-MSElambda=colSums((pihat0b-min(pihat0))^2)/nrow(pihat0b)
+MSElambda=colSums((pihat0b-min(pihat0))^2)/nrow(pihat0b) #NOT SURE why min() needed here, but it is in the paper. any idea?
 plot(testlambdas,MSElambda)
 lambdastar=testlambdas[which(MSElambda==min(MSElambda))][1]
 pihat=getpihat(lambdastar,pvals[,1])
 pihat
 
 # Calculating gamma * via the bootstrapping methodology for pi_negative
-getSgamma<-function(gamma,dir,values){
-  thres=qt(gamma/2,9999)
-  return(length(which(-dir*values< thres))/length(values))
+getSgamma<-function(gamma,dir,tvals,pvals){
+  thres=gamma/2
+  return(length(which(pvals<thres & dir*tvals>0))/length(tvals))
 }
-getTgamma<-function(gamma,pihat,dir,values){
-  return(getSgamma(gamma,dir,values)-pihat*gamma/2)
+getTgamma<-function(gamma,pihat,dir,svalues){
+  tvals=tstats[svalues,1]
+  pvals=pvals[svalues,1]
+  return(getSgamma(gamma,dir,tvals,pvals)-pihat*gamma/2)
 }
 
 testgammas=seq(from=0.3,to=0.5,by=0.05)
-sapply(testgammas,getTgamma,pihat,1,tstats[,1])
+sapply(testgammas,getTgamma,pihat,1,1:length(tstats[,1]))
 
 mingamma=0.3
 maxgamma=0.5
 testgammas=seq(from=mingamma,to=maxgamma,by=0.05)
 dir=-1
-piA0=sapply(testgammas,getTgamma,pihat,dir,tstats[,1])
+piA0=sapply(testgammas,getTgamma,pihat,dir,1:length(tstats[,1]))
 piA0b=NULL
 for (b in 1:1000) {
-  piA0b=rbind(piA0b,sapply(testgammas,getTgamma,pihat,dir,sample(x=tstats[,1],size=length(tstats[,1]),replace=T)))
+  piA0b=rbind(piA0b,sapply(testgammas,getTgamma,pihat,dir,sample(x=1:length(pvals[,1]),size=length(pvals[,1]),replace=T)))
 }
-MSEgamma=colSums((piA0b-min(piA0))^2)/nrow(piA0b)
+MSEgamma=colSums((piA0b-min(piA0))^2)/nrow(piA0b) #NOT SURE why min() needed here, but it is in the paper. any idea?
 plot(MSEgamma)
 minMSEneg=min(MSEgamma)
 gammastarneg=testgammas[which(MSEgamma==minMSEneg)][1]
 gammastarneg
 
 dir=1
-piA0=sapply(testgammas,getTgamma,pihat,dir,tstats[,1])
+piA0=sapply(testgammas,getTgamma,pihat,dir,1:length(tstats[,1]))
 piA0b=NULL
 for (b in 1:1000) {
-  piA0b=rbind(piA0b,sapply(testgammas,getTgamma,pihat,dir,sample(x=tstats[,1],size=length(tstats[,1]),replace=T)))
+  piA0b=rbind(piA0b,sapply(testgammas,getTgamma,pihat,dir,sample(x=1:length(pvals[,1]),,size=length(pvals[,1]),replace=T)))
 }
-MSEgamma=colSums((piA0b-max(piA0))^2)/nrow(piA0b)
+MSEgamma=colSums((piA0b-max(piA0))^2)/nrow(piA0b) #NOT SURE why max() needed here, but it is in the paper. any idea?
 plot(MSEgamma)
 minMSEpos=min(MSEgamma)
 gammastarpos=testgammas[which(MSEgamma==minMSEpos)]
 
 if (minMSEneg<minMSEpos) {
   gammastar=gammastarneg
-  piAneg=getTgamma(gammastar,pihat,-1,pvals[,1])
+  piAneg=getTgamma(gammastar,pihat,-1,1:length(pvals[,1]))
   piApos=1-piAneg-pihat
 } else {
   gammastar=gammastarpos
-  piApos=getTgamma(gammastar,pihat,1,pvals[,1])
+  piApos=getTgamma(gammastar,pihat,1,1:length(pvals[,1]))
   piAneg=1-piApos-pihat
 }
+
+#results
 lambdastar
 gammastar
 piAneg
 pihat
 piApos
 
-
-#Compile a table for multiple points of gamma with MSE numbers Sensitivity to certain parameters Ferson and Chan need to understand method and code it up Concluding thoughts: Are factors really betas? Is alpha really alpha? Tstat of alpha says more about consistances than actual outperformance x--AHL is listed multiple times for the same fund but different currency share classes, I suspect the original data is not as clean as it could be FC use only 12 month window for HF which is far too short as it doesn't cover the business cycle Best info is how much type you should be spending on DD. If there are not many bad funds but some zero alpha funds. x--Multiple share classes of same funds. Different currency classes can have different alpha if they don't hedge This is only slightly relevant for FoF and not in the spirit of EDHEC RI which calls for customized investment solutions for each investor which I would agree is more inline in traditional investment theory (endogenous utility functions). Parsimony question
-
 ################################
 #Ferson & Chen
 ################################
-alphab=-0.1
-alphag=0.1
-gamma=2*0.1
 nsim=1000
-simalpha1=sample(x=tstats[,1],size=nsim,replace=T)
-# tg=tratio above which 10% of the simulated tstats lie within the null of zero alphas
-tg=quantile(simalpha1,0.9)
-# tb=value below which 10% of the sim tstats lie under the null hypothesis of zero alphas
-tb=quantile(simalpha1,0.1)
-# hist(tstats[,1])
-simalpha2=sample(x=tstats[,1],size=nsim,replace=T)
-# betag=fraction of simulated trats above tg
-betag=length(which(simalpha2>tg))/nsim
-# deltab=fraction of simulated trats below tb (empirical estimate of prob of rejecting the null in favor of finding a bad fund when the fund is actually goog)
-deltab=length(which(simalpha2<tb))/nsim
-simalpha3=sample(x=tstats[,1],size=nsim,replace=T)
-# betab=fraction of simulated trats below tb
-betab=length(which(simalpha3<tb))/nsim
-# deltag=fraction of simulated trats above tg 
-deltag=length(which(simalpha3>tg))/nsim
-# Fb=fraction of rejections of the null hypothesis in the actual data for tb
-Fb=length(which(tstats[,1]<tb))/length(tstats[,1])
-# Fg=fraction of rejections of the null hypo in the actual data for tg
-Fg=length(which(tstats[,1]>tg))/length(tstats[,1])
+gamma=2*0.1 #F&C use 2*0.1, BSW use 2*0.3
+alphabtestvals=seq(-0.85,-0.05,0.2)
+alphagtestvals=seq(0.05,0.85,0.2)
+#loop over grid of alpha values to test for best pair
+pchi2s=matrix(nrow=length(alphabtestvals),ncol=length(alphagtestvals))
+pibhats=matrix(nrow=length(alphabtestvals),ncol=length(alphagtestvals))
+pighats=matrix(nrow=length(alphabtestvals),ncol=length(alphagtestvals))
+for (bb in 1:length(alphabtestvals)) {
+  for (gg in 1:length(alphagtestvals)) {
+  set.seed(1)
+  alphab=alphabtestvals[bb]
+  alphag=alphagtestvals[gg]
+  # alphab=-0.1
+  # alphag=0.1
+  
+  simalpha1=sample(x=tstats[,1],size=nsim,replace=T) #NOT SURE how the simulation is supposed to be done
+  # tg=tratio above which 10% of the simulated tstats lie within the null of zero alphas
+  tg=quantile(simalpha1,0.9)
+  # tb=value below which 10% of the sim tstats lie under the null hypothesis of zero alphas
+  tb=quantile(simalpha1,0.1)
+  # hist(tstats[,1])
+  simalpha2=sample(x=tstats[,1],size=nsim,replace=T)+alphag #NOT SURE how the simulation is supposed to be done
+  # betag=fraction of simulated trats above tg
+  betag=length(which(simalpha2>tg))/nsim
+  # deltab=fraction of simulated trats below tb (empirical estimate of prob of rejecting the null in favor of finding a bad fund when the fund is actually goog)
+  deltab=length(which(simalpha2<tb))/nsim
+  simalpha3=sample(x=tstats[,1],size=nsim,replace=T)+alphab #NOT SURE how the simulation is supposed to be done
+  # betab=fraction of simulated trats below tb
+  betab=length(which(simalpha3<tb))/nsim
+  # deltag=fraction of simulated trats above tg 
+  deltag=length(which(simalpha3>tg))/nsim
+  # Fb=fraction of rejections of the null hypothesis in the actual data for tb
+  Fb=length(which(tstats[,1]<tb))/length(tstats[,1])
+  # Fg=fraction of rejections of the null hypo in the actual data for tg
+  Fg=length(which(tstats[,1]>tg))/length(tstats[,1])
+  
+  # two equations in two unknowns
+  # Fg=(gamma/2)*pi0+deltag*pib+betag*pig=(gamma/2)+(deltag-(gamma/2))*pib+(betag-(gamma/2))*pig
+  # Fb=(gamma/2)*pi0+betab*pib+deltab*pig=(gamma/2)+(betab-(gamma/2))*pib+(deltab-(gamma/2))*pig
+  # pi0=1-pib-pig
+  # pib>=0
+  # pig>=0
+  # pib+pig<=1
+  # 0=(deltag-(gamma/2))*pib+(betag-(gamma/2))*pig+(gamma/2)-Fg=(betab-(gamma/2))*pib+(deltab-(gamma/2))*pig+(gamma/2)-Fb
+  # minimize difference -> minimize sum of squares of above two equations -> quadratic system with below parameterisation
+  Dmat=rbind(c((deltag-(gamma/2))^2+(betab-(gamma/2))^2,(deltab-(gamma/2))*(betab-(gamma/2))+(deltag-(gamma/2))*(betag-(gamma/2))),
+    c((deltab-(gamma/2))*(betab-(gamma/2))+(deltag-(gamma/2))*(betag-(gamma/2)),(betag-(gamma/2))^2+(deltab-(gamma/2))^2))
+  dvec=-c((deltag-(gamma/2))*((gamma/2)-Fg)+(betab-(gamma/2))*((gamma/2)-Fb),(betag-(gamma/2))*((gamma/2)-Fg)+(deltab-(gamma/2))*((gamma/2)-Fb))
+  Amat=t(rbind(c(1,0),c(0,1),-c(1,1)))
+  bvec=c(0,0,-1)
+  qsol=solve.QP(Dmat=Dmat,dvec=dvec,Amat=Amat,bvec=bvec,meq=0)
+  pibhat=qsol$solution[1]
+  pighat=qsol$solution[2]
+  
+  #cell boundaries set so that approx equal number of tratios appear in each cell in original data
+  #e.g. N/100 per cell
+  K=100 #cells
+  binbounds=quantile(tstats[,1],c(seq(from=0,to=1,by=1/K)))
+  simtypes=(sample(c(1,2,3),nsim,p=c(max(0,pibhat),max(0,1-pibhat-pighat),min(pighat,1-pibhat)),replace=T))
+  simalpha4=c(rnorm(n=length(which(simtypes==1)),mean=alphab,sd=1),rnorm(n=length(which(simtypes==2)),mean=0,sd=1),rnorm(n=length(which(simtypes==3)),mean=alphag,sd=1))
+  # oi=freq of tstats for alpha in cell i in original data
+  # mi=freq of tstats for alpha in cell i in model data
+  Obincounts=sapply(1:K,function(x){length(which(tstats[,1]>binbounds[x]))})-sapply(1:K,function(x){length(which(tstats[,1]>binbounds[x+1]))})
+  Mbincounts=sapply(1:K,function(x){length(which(simalpha4>binbounds[x]))})-sapply(1:K,function(x){length(which(simalpha4>binbounds[x+1]))})
+  
+  # pchi2=sum((oi-mi)^2/oi)
+  pchi2=sum((Obincounts-Mbincounts)^2/Obincounts)
+  pchi2s[bb,gg]=pchi2
+  pibhats[bb,gg]=pibhat
+  pighats[bb,gg]=pighat
+  }
+}
 
-# two equations in two unknowns
-# Fg=(gamma/2)*pi0+deltag*pib+betag*pig=(gamma/2)+(deltag-(gamma/2))*pib+(betag-(gamma/2))*pig
-# Fb=(gamma/2)*pi0+betab*pib+deltab*pig=(gamma/2)+(betab-(gamma/2))*pib+(deltab-(gamma/2))*pig
-# pi0=1-pib-pig
-# pib>=0
-# pig>=0
-# pib+pig<=1
-# 0=(deltag-(gamma/2))*pib+(betag-(gamma/2))*pig+(gamma/2)-Fg=(betab-(gamma/2))*pib+(deltab-(gamma/2))*pig+(gamma/2)-Fb
-# minimize difference -> minimize sum of squares of above two equations -> quadratic system with below parameterisation
-Dmat=rbind(c((deltag-(gamma/2))^2+(betab-(gamma/2))^2,(deltab-(gamma/2))*(betab-(gamma/2))+(deltag-(gamma/2))*(betag-(gamma/2))),
-  c((deltab-(gamma/2))*(betab-(gamma/2))+(deltag-(gamma/2))*(betag-(gamma/2)),(betag-(gamma/2))^2+(deltab-(gamma/2))^2))
-dvec=-c((deltag-(gamma/2))*((gamma/2)-Fg)+(betab-(gamma/2))*((gamma/2)-Fb),(betag-(gamma/2))*((gamma/2)-Fg)+(deltab-(gamma/2))*((gamma/2)-Fb))
-Amat=t(rbind(c(1,0),c(0,1),-c(1,1)))
-bvec=c(0,0,-1)
-qsol=solve.QP(Dmat=Dmat,dvec=dvec,Amat=Amat,bvec=bvec,meq=0)
-pibhat=qsol$solution[1]
-pighat=qsol$solution[2]
-
-#cell boundaries set so that approx equal number of tratios appear in each cell in original data
-#e.g. N/100 per cell
-K=100 #cells
-binbounds=quantile(tstats[,1],c(seq(from=0,to=1,by=1/K)))
-simtypes=(sample(c(1,2,3),nsim,p=c(pibhat,1-pibhat-pighat,pighat),replace=T))
-simalpha4=c(rnorm(n=length(which(simtypes==1)),mean=alphab,sd=1),rnorm(n=length(which(simtypes==2)),mean=0,sd=1),rnorm(n=length(which(simtypes==3)),mean=alphag,sd=1))
-# oi=freq of tstats for alpha in cell i in original data
-# mi=freq of tstats for alpha in cell i in model data
-Obincounts=sapply(1:K,function(x){length(which(tstats[,1]>binbounds[x]))})-sapply(1:K,function(x){length(which(tstats[,1]>binbounds[x+1]))})
-Mbincounts=sapply(1:K,function(x){length(which(simalpha4>binbounds[x]))})-sapply(1:K,function(x){length(which(simalpha4>binbounds[x+1]))})
-
-# pchi2=sum((oi-mi)^2/oi)
-pchi2=sum((Obincounts-Mbincounts)^2/Obincounts)
-
-
+#results
+minind=which(pchi2s==min(pchi2s),arr.ind=T)
+alphabtestvals[minind[1]]
+alphagtestvals[minind[2]]
+pibhats[minind]
+pighats[minind]
 
 #BSW, occurs when betag=betab=1 and deltag=deltab=0
 #pi0BSW=[1-(Fb+Fg)]/(1-gamma); pigBSW=Fg-(gamma/2)*pi0BSW
