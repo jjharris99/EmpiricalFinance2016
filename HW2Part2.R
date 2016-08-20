@@ -4,10 +4,15 @@ library(openxlsx)
 library(quadprog)
 library(sandwich)
 library(lmtest)
+#Load the libraries required to do parallel processing
+library("foreach")
+library("parallel")
+library("doParallel")
 options(stringsAsFactors=FALSE)
 
 #set the directory to read from
-workdir="/Users/jonharris/Google Drive2/EDHEC/Courses/ReneEmpirical/Assign2/EmpiricalFinance2016/"
+# workdir="/Users/jonharris/Google Drive2/EDHEC/Courses/ReneEmpirical/Assign2/EmpiricalFinance2016/"
+workdir="C:/Users/jonat/Documents/GitHub/EmpiricalFinance2016/"
 
 fof=read.xlsx(paste(c(workdir,"FoF.xlsx"),collapse=""),detectDates=T)
 factors=read.xlsx(paste(c(workdir,"Factors(1).xlsx"),collapse=""),startRow=5,detectDates=T)
@@ -25,54 +30,82 @@ fofrf=rf[fof2rfmatch,2:ncol(rf)]
 
 plot(rowMeans(fof[,2:ncol(fof)],na.rm=T))
 
-View(cbind(fofrf,fofcrsp$yldave1mth/100/12))
+View(cbind(fof[,1:5],fofrf,fofcrsp,foffactors))
 #select funds with 5 years of performance: 1) in line with BSW, 2) to review funds exposed to a variety of market environments
 
-resids=as.data.frame(NULL)
+resids=NULL
 coefs=as.data.frame(NULL)
 tstats=as.data.frame(NULL)
 serrs=as.data.frame(NULL)
-pvals=as.data.frame(NULL)
-pvals2=as.data.frame(NULL)
-tis=rep(NA,1000)
-# fcol=15
-for (fcol in 2:6393) {#ncol(fof)) {
+pvals0=as.data.frame(NULL)
+for (fcol in 2:ncol(fof)) {
   rexc=fof[,fcol]-fofrf
   validt=which(!is.na(rexc))
-  if (length(validt)>=36) {
+  if (length(validt)>=60) {
+    residf=rep(NA,nrow(fof))
     fit=lm(rexc[validt] ~ foffactors[validt,1]+foffactors[validt,2]+foffactors[validt,8]+foffactors[validt,3]+foffactors[validt,4]+foffactors[validt,5]+foffactors[validt,6]+foffactors[validt,7])
-
-    for (ii in 1:1000) {
-#       validti=sample(validt,length(validt),replace=T)
-#       fiti=lm(rexc[validti] ~ foffactors[validti,1]+foffactors[validti,2]+foffactors[validti,8]+foffactors[validti,3]+foffactors[validti,4]+foffactors[validti,5]+foffactors[validti,6]+foffactors[validti,7])
-#       tis[ii]=unclass(coeftest(fiti, vcov. = NeweyWest))[1,3] #Newey-West adjustment
-      validti=sample(residf,length(residf),replace=T)
-      tis[ii]=mean(validti)/sd(validti) #Newey-West adjustment      
-    }
-
-    residf=fit$residuals
-    resids=rbind(resids,residf)
+    residf[validt]=fit$residuals
+    resids=cbind(resids,residf)
     fitstats=unclass(coeftest(fit, vcov. = NeweyWest)) #Newey-West adjustment
     coefs=rbind(coefs,fit$coefficients)
     tstats=rbind(tstats,fitstats[,3])
     serrs=rbind(serrs,fitstats[,2])
-    pvalf=fitstats[,4]
-    simresid=sample(residf,1000,replace=T)
-    pvalf[1]=2*min(length(which(tis<fitstats[1,3])),length(which(tis>fitstats[1,3])))/length(tis)
-#       2*min(length(which(simresid/fitstats[1,2]<fitstats[1,3])),length(which(simresid/fitstats[1,2]>fitstats[1,3])))/length(simresid)
-    pvals=rbind(pvals,pvalf)
-#     coefs=rbind(coefs,fit$coefficients)
-#     tstats=rbind(tstats,summary(fit)$coefficients[,3])
-#     pvals2=rbind(pvals2,summary(fit)$coefficients[,4])
+    pvals0=rbind(pvals0,summary(fit)$coefficients[,4])
   }
 }
-hist(pvals[,1],50,)
-# hist(pvals2[,1],50)
-# pvals=pvals2
-  
+hist(pvals0[,1],50)
 names(coefs)=names(fit$coefficients)
 names(tstats)=names(fit$coefficients)
-names(pvals)=names(fit$coefficients)
+names(pvals0)=names(fit$coefficients)
+
+#setup parallel cores
+if (!exists("cl")) {
+  detectCores()
+  numcores=4                       #number of parallel processes to run
+  cl <- makeCluster(numcores)               #setup the processes
+  registerDoParallel(cl, cores = numcores)  #register the processes to be used
+  setDefaultCluster(cl)
+}
+# stopCluster(cl)
+
+#bootstrap simulate returns in order to get simulated Tstats to use to calculate pvalues
+M=1000
+factorexplainedreturns=as.matrix(foffactors)%*%t(coefs[,2:ncol(coefs)])
+dim(factorexplainedreturns)
+res <- foreach(mm=1:M,.inorder=F,.packages=c('sandwich','lmtest'),.combine='rbind')%dopar%{
+  tis=rep(NA,ncol(resids))
+  for (cc in 1:ncol(resids)) {
+    validt=which(!is.na(resids[,cc]))
+    validti=sample(validt,length(validt),replace=T)
+    ri=resids[validti,cc]+factorexplainedreturns[validt,cc]
+    fiti=lm(ri ~ foffactors[validti,1]+foffactors[validti,2]+foffactors[validti,8]+foffactors[validti,3]+foffactors[validti,4]+foffactors[validti,5]+foffactors[validti,6]+foffactors[validti,7])
+    tis[cc]=unclass(coeftest(fiti, vcov. = NeweyWest))[1,3]
+  }
+  tis
+}
+# save(tis,file = paste(c(workdir,"tis.rdata"),collapse=""))
+
+# #nonparallel version
+# tis = matrix(nrow=M,ncol=ncol(resids))
+# for (mm in 1:M){
+#   if (mm %% 10 ==1) {print(mm)}
+#   for (cc in 1:ncol(resids)) {
+#     validt=which(!is.na(resids[,cc]))
+#     validti=sample(validt,length(validt),replace=T)
+#     ri=resids[validti,cc]+factorexplainedreturns[validt,cc]
+#     fiti=lm(ri ~ foffactors[validti,1]+foffactors[validti,2]+foffactors[validti,8]+foffactors[validti,3]+foffactors[validti,4]+foffactors[validti,5]+foffactors[validti,6]+foffactors[validti,7])
+#     tis[mm,cc]=unclass(coeftest(fiti, vcov. = NeweyWest))[1,3]
+#   }
+# }
+
+
+pvals=rep(NA,ncol(resids))
+for (cc in 1:ncol(resids)) {
+  pvals[cc]=2*min(length(which(tis[,cc]<tstats[cc,1])),length(which(tis[,cc]>tstats[cc,1])))/nrow(tis)
+}
+
+pvals=pvals0
+
 mean(coefs$'(Intercept)')
 min(coefs$'(Intercept)')
 max(coefs$'(Intercept)')
@@ -99,10 +132,11 @@ pihat0b=NULL
 for (b in 1:1000) {
   pihat0b=rbind(pihat0b,sapply(testlambdas,getpihat,sample(x=pvals[,1],size=length(pvals[,1]),replace=T)))
 }
-MSElambda=colSums((pihat0b-min(pihat0))^2)/nrow(pihat0b) #NOT SURE why min() needed here, but it is in the paper. any idea?
+MSElambda=colSums((pihat0b-min(pihat0))^2)/nrow(pihat0b) 
 plot(testlambdas,MSElambda)
 lambdastar=testlambdas[which(MSElambda==min(MSElambda))][1]
 pihat=getpihat(lambdastar,pvals[,1])
+lambdastar
 pihat
 
 # Calculating gamma * via the bootstrapping methodology for pi_negative
@@ -128,7 +162,7 @@ piA0b=NULL
 for (b in 1:1000) {
   piA0b=rbind(piA0b,sapply(testgammas,getTgamma,pihat,dir,sample(x=1:length(pvals[,1]),size=length(pvals[,1]),replace=T)))
 }
-MSEgamma=colSums((piA0b-min(piA0))^2)/nrow(piA0b) #NOT SURE why min() needed here, but it is in the paper. any idea?
+MSEgamma=colSums((piA0b-min(piA0))^2)/nrow(piA0b) 
 plot(MSEgamma)
 minMSEneg=min(MSEgamma)
 gammastarneg=testgammas[which(MSEgamma==minMSEneg)][1]
@@ -140,7 +174,7 @@ piA0b=NULL
 for (b in 1:1000) {
   piA0b=rbind(piA0b,sapply(testgammas,getTgamma,pihat,dir,sample(x=1:length(pvals[,1]),,size=length(pvals[,1]),replace=T)))
 }
-MSEgamma=colSums((piA0b-max(piA0))^2)/nrow(piA0b) #NOT SURE why max() needed here, but it is in the paper. any idea?
+MSEgamma=colSums((piA0b-max(piA0))^2)/nrow(piA0b) 
 plot(MSEgamma)
 minMSEpos=min(MSEgamma)
 gammastarpos=testgammas[which(MSEgamma==minMSEpos)]
@@ -169,6 +203,25 @@ nsim=1000
 gamma=2*0.1 #F&C use 2*0.1, BSW use 2*0.3
 alphabtestvals=seq(-0.85,-0.05,0.2)
 alphagtestvals=seq(0.05,0.85,0.2)
+
+#generate base zero-alpha simulated tstats for each fund following F&C / Fama&French approach (keeping residuals and factors from same time together, in contrast to BSW)
+tis = matrix(nrow=nsim,ncol=ncol(resids))
+for (mm in 1:nsim) {
+  if (mm %% 10 ==1) {print(mm)}
+  cc=0
+  for (fcol in 2:ncol(fof)) {
+    rexc=fof[,fcol]-fofrf
+    validt=which(!is.na(rexc))
+    if (length(validt)>=60) {
+      cc=cc+1
+      validti=sample(validt,length(validt),replace=T)
+      fit=lm(rexc[validti] ~ foffactors[validti,1]+foffactors[validti,2]+foffactors[validti,8]+foffactors[validti,3]+foffactors[validti,4]+foffactors[validti,5]+foffactors[validti,6]+foffactors[validti,7])
+      fitstats=unclass(coeftest(fit, vcov. = NeweyWest)) #Newey-West adjustment
+      tis[mm,cc]=unclass(coeftest(fiti, vcov. = NeweyWest))[1,3]
+    }
+  } 
+}
+
 #loop over grid of alpha values to test for best pair
 pchi2s=matrix(nrow=length(alphabtestvals),ncol=length(alphagtestvals))
 pibhats=matrix(nrow=length(alphabtestvals),ncol=length(alphagtestvals))
