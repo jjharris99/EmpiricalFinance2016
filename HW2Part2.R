@@ -198,6 +198,9 @@ piApos
 #Ferson & Chen
 ################################
 nsim=10 #F&C and Danish paper use 1000, but this takes forever, so 10 used here for homework purposes
+
+#note F&C use 8 months, but for comparison with BSW we use 60 as well
+
 #generate base zero-alpha simulated tstats for each fund following F&C / Fama&French approach (keeping residuals and factors from same time together, in contrast to BSW)
 set.seed(1)
 tis = matrix(nrow=nsim,ncol=ncol(resids))
@@ -209,6 +212,7 @@ for (mm in 1:nsim) {
     validt=which(!is.na(rexc))
     if (length(validt)>=60) {
       cc=cc+1
+      rexc=rexc-coefs[cc,1] #subtract estimated alpha
       validti=sample(validt,length(validt),replace=T)
       fit=lm(rexc[validti] ~ foffactors[validti,1]+foffactors[validti,2]+foffactors[validti,8]+foffactors[validti,3]+foffactors[validti,4]+foffactors[validti,5]+foffactors[validti,6]+foffactors[validti,7])
       tis[mm,cc]=unclass(coeftest(fit, vcov. = NeweyWest))[1,3]
@@ -217,8 +221,8 @@ for (mm in 1:nsim) {
 }
 
 gamma=2*0.1 #F&C use 2*0.1, BSW use 2*0.3
-alphabtestvals=seq(-0.85,-0.05,0.1)
-alphagtestvals=seq(0.05,0.85,0.1)
+alphabtestvals=seq(-1.85,-0.05,0.1)
+alphagtestvals=seq(0.05,1.85,0.1)
 
 #cell boundaries set so that approx equal number of tratios appear in each cell in original data
 #e.g. N/100 per cell
@@ -298,7 +302,7 @@ for (bb in 1:length(alphabtestvals)) {
   pighat=qsol$solution[2]
   
   #cell boundaries set so that approx equal number of tratios appear in each cell in original data #e.g. N/100 per cell
-  simalpha4=tis[mm,]+sample(c(alphab,0,alphag),nsim2,p=c(max(0,pibhat),max(0,1-pibhat-pighat),min(pighat,1-pibhat)),replace=T)
+  simalpha4=tis[mm,]+sample(c(alphab,0,alphag),nsim2,p=c(max(0,pibhat),max(0,1-pibhat-pighat),max(0,min(pighat,1-pibhat))),replace=T)
   # oi=freq of tstats for alpha in cell i in original data
   # mi=freq of tstats for alpha in cell i in model data
   Mbincounts=sapply(1:K,function(x){length(which(simalpha4>binbounds[x]))})-sapply(1:K,function(x){length(which(simalpha4>binbounds[x+1]))})
