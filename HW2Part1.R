@@ -31,7 +31,8 @@ summary(fit)
 fit$varresult
 resid   <- residuals(fit)                                #get residuals from model
 # covres   <- cov(resid)                                    #"manually" compute covmarix
-sigma=as.matrix(summary(fit)$covres)
+sigmacovar=as.matrix(summary(fit)$covres)
+sigma=t(chol(sigmacovar))
 # names(summary(fit))
 muphi=rbind(as.data.frame(lapply(summary(fit)$varresult,function(x){x$coefficients[,1]})))
 mu=as.vector(muphi[4,])
